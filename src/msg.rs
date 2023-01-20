@@ -9,7 +9,7 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     Increment {},
     Reset { count: i32 },
-    Verify {},
+    Verify {proof_str: String, pub_input_str: String, vkey_str: String},
 }
 
 #[cw_serde]
