@@ -9,7 +9,6 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     Increment {},
     Reset { count: i32 },
-    Verify {proof_str: String, pub_input_str: String, vkey_str: String},
 }
 
 #[cw_serde]
@@ -18,10 +17,17 @@ pub enum QueryMsg {
     // GetCount returns the current count as a json-encoded number
     #[returns(GetCountResponse)]
     GetCount {},
+    #[returns(GetVerifyResponse)]
+    Verify {proof_str: String, pub_input_str: String, vkey_str: String},
 }
 
 // We define a custom struct for each query response
 #[cw_serde]
 pub struct GetCountResponse {
     pub count: i32,
+}
+
+#[cw_serde]
+pub struct GetVerifyResponse {
+    pub verified:bool,
 }

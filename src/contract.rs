@@ -4,7 +4,7 @@ use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response,
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg, GetVerifyResponse};
 use crate::state::{State, STATE};
 
 // version info for migration info
@@ -39,14 +39,11 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Increment {} => execute::increment(deps),
-        ExecuteMsg::Reset { count } => execute::reset(deps, info, count),
-        ExecuteMsg::Verify {proof_str, pub_input_str,vkey_str} => execute::verify_proof(&proof_str, &pub_input_str, &vkey_str),
+        ExecuteMsg::Increment {} => increment(deps),
+        ExecuteMsg::Reset { count } => reset(deps, info, count),
     }
 }
 
-pub mod execute {
-    use super::*;
 
     pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
         STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
@@ -68,8 +65,42 @@ pub mod execute {
         Ok(Response::new().add_attribute("action", "reset"))
     }
 
-    pub fn verify_proof(proof_str: &str, pub_input_str: &str, vkey_str: &str) -> Result<Response, ContractError> {
-        // let proof_str = r#"
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::GetCount {} => to_binary(&count(deps)?),
+        QueryMsg::Verify { proof_str, pub_input_str, vkey_str } => to_binary(&verify_proof(&proof_str, &pub_input_str, &vkey_str)?),
+    }
+}
+
+
+
+
+    pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
+        let state = STATE.load(deps.storage)?;
+        Ok(GetCountResponse { count: state.count })
+    }
+
+    pub fn verify_proof(proof_str: &str, pub_input_str: &str, vkey_str: &str) -> StdResult<GetVerifyResponse> {
+       let vkey =  electron_rs::verifier::near::parse_verification_key(vkey_str.to_string()).unwrap();
+       let pvk = electron_rs::verifier::near::get_prepared_verifying_key(vkey);
+       let result = electron_rs::verifier::near::verify_proof(pvk, proof_str.to_string(), pub_input_str.to_string()).unwrap();
+       Ok(GetVerifyResponse { verified: result })
+    }
+
+
+
+#[cfg(test)]
+mod tests {
+    use crate::contract::query;
+
+    use super::*;
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::{coins, from_binary};
+
+    #[test]
+    fn proper_initialization() {
+                // let proof_str = r#"
         // {
         //     "pi_a": [
         //      "15962977779125852550845298703474087870195173890078489799946886499971175404253",
@@ -201,37 +232,6 @@ pub mod execute {
         //     ]
         //    }
         // "#;
-       let vkey =  electron_rs::verifier::near::parse_verification_key(vkey_str.to_string()).unwrap();
-       let pvk = electron_rs::verifier::near::get_prepared_verifying_key(vkey);
-       let result = electron_rs::verifier::near::verify_proof(pvk, proof_str.to_string(), pub_input_str.to_string()).unwrap();
-       Ok(Response::new().add_attribute("result", result.to_string()))
-    }
-}
-
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    match msg {
-        QueryMsg::GetCount {} => to_binary(&query::count(deps)?),
-    }
-}
-
-pub mod query {
-    use super::*;
-
-    pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
-        let state = STATE.load(deps.storage)?;
-        Ok(GetCountResponse { count: state.count })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary};
-
-    #[test]
-    fn proper_initialization() {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg { count: 17 };
